@@ -1,8 +1,10 @@
 import { Context } from "hono";
 
-import { getEnvStringList, getJsonObjectValue, getJsonSetting, getMailDomain, isDomainOrSubdomain, normalizeDomain } from "../utils";
-import { EmailRuleSettings } from "../models";
+import { getBooleanValue, getEnvStringList, getJsonObjectValue, getJsonSetting, getMailDomain, isDomainOrSubdomain, normalizeDomain } from "../utils";
+import { EmailRuleSettings, ExtractResult } from "../models";
 import { CONSTANTS } from "../constants";
+import { extractCode, joinSubjectAndBody } from "./extract_code";
+import { commonParseMail } from "../common";
 
 // 正则表达式最大长度限制，防止 ReDoS 攻击
 const MAX_REGEX_PATTERN_LENGTH = 200;
@@ -131,8 +133,42 @@ async function forwardByRules(
  */
 async function forwardEmail(
     message: ForwardableEmailMessage,
-    env: Bindings
+    env: Bindings,
+    aiExtractResult?: ExtractResult | null,
+    parsedEmailContext?: ParsedEmailContext
 ): Promise<void> {
+    if (getBooleanValue(env.FORWARD_ONLY_VERIFY_CODE)) {
+        let hasCodeOrAuth = false;
+
+        // 1. 检查 AI 提取结果或本地提取结果 (ExtractResult)
+        if (aiExtractResult && aiExtractResult.result) {
+            if (aiExtractResult.type === 'auth_code') {
+                hasCodeOrAuth = true;
+            } else if (aiExtractResult.type === 'auth_link' && getBooleanValue(env.FORWARD_ALLOW_AUTH_LINK ?? true)) {
+                hasCodeOrAuth = true;
+            }
+        }
+
+        // 2. 本地兜底验证：若 AI 未开启或未提取出结果，通过本地 extractCode 正则引擎再检测一次
+        if (!hasCodeOrAuth && parsedEmailContext) {
+            try {
+                const parsedEmail = await commonParseMail(parsedEmailContext);
+                const localContent = joinSubjectAndBody(parsedEmail?.subject, parsedEmail?.text);
+                const code = localContent ? extractCode(localContent) : null;
+                if (code) {
+                    hasCodeOrAuth = true;
+                }
+            } catch (e) {
+                console.error("forward fallback extractCode error", e);
+            }
+        }
+
+        if (!hasCodeOrAuth) {
+            console.log(`[FORWARD] Skipped forwarding email from ${message.from} to ${message.to}: no verification code or auth link detected`);
+            return;
+        }
+    }
+
     // 全局转发
     await forwardToGlobalAddresses(message, env);
 

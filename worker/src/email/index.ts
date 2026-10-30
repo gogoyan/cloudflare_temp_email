@@ -79,11 +79,11 @@ async function email(message: ForwardableEmailMessage, env: Bindings, ctx: Execu
         return undefined;
     });
 
-    // forward email
-    await forwardEmail(message, env);
-
     // AI email content extraction
     const aiExtractResult = await extractEmailInfo(parsedEmailContext, env, message_id, toAddress);
+
+    // forward email
+    await forwardEmail(message, env, aiExtractResult, parsedEmailContext);
 
     // send email to telegram
     try {

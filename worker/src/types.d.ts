@@ -74,6 +74,8 @@ type Bindings = {
     DISABLE_SHOW_GITHUB: string | boolean | undefined
     DISABLE_SHOW_GITHUB_FOR_USER: string | boolean | undefined
     FORWARD_ADDRESS_LIST: string | string[] | undefined
+    FORWARD_ONLY_VERIFY_CODE: string | boolean | undefined
+    FORWARD_ALLOW_AUTH_LINK: string | boolean | undefined
 
     ENABLE_CHECK_JUNK_MAIL: string | boolean | undefined
     JUNK_MAIL_CHECK_LIST: string | string[] | undefined
