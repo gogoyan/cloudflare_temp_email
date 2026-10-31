@@ -198,3 +198,16 @@ test('extractAuthLink returns null for marketing spam and social links', () => {
   const marketingEmail = `Halloween costumes for your whole crew!\nApp Store: https://apps.apple.com/app/chatgpt/id6448311069\nUnsubscribe: https://r.openai.com/ls/click?upn=123`;
   assert.equal(extractAuthLink(marketingEmail), null);
 });
+
+test('extractAuthLink returns null for OpenAI marketing feedback telemetry link with token', () => {
+  const openAiMarketing = `有 4 种新图像风格等你尝试\n\nWas this notification useful?\nhttps://chatgpt.com/backend-api/notifications/feedback?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2NvdW50X3VzZXJfaWQiOiJ1c2VyLWtLWllVdVVwSzAyOUVnSFFGNW5QejNtZiJ9.MntltnOB&entry_id=8d107965&auth_modal=1&login_hint=user%40example.com&utm_campaign=trend`;
+  assert.equal(extractAuthLink(openAiMarketing), null);
+});
+
+test('extractAuthLink extracts Supabase verify link', () => {
+  const supabaseEmail = `Confirm your signup:\nhttps://example.supabase.co/auth/v1/verify?token=pk_123456789&type=signup&redirect_to=https://example.com`;
+  assert.equal(
+    extractAuthLink(supabaseEmail),
+    'https://example.supabase.co/auth/v1/verify?token=pk_123456789&type=signup&redirect_to=https://example.com'
+  );
+});

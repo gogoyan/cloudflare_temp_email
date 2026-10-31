@@ -223,10 +223,16 @@ function looksLikeDate(digits: string): boolean {
     return false;
 }
 
-const EXCLUDED_AUTH_URL_PATTERNS = /(?:unsubscribe|opt[ -]?out|privacy|terms|cookie|settings|help|support|faq|twitter\.com|x\.com|facebook\.com|linkedin\.com|instagram\.com|discord\.(?:com|gg)|youtube\.com|\.(?:png|jpe?g|gif|svg|webp|ico|css|js)(?:\?|$))/i;
+const EXCLUDED_AUTH_URL_PATTERNS = /(?:unsubscribe|opt[ -]?out|privacy|terms|cookie|settings|help|support|faq|feedback|survey|notification|telemetry|analytics|tracking|pixel|metrics|banner|click|twitter\.com|x\.com|facebook\.com|linkedin\.com|instagram\.com|discord\.(?:com|gg)|youtube\.com|\.(?:png|jpe?g|gif|svg|webp|ico|css|js)(?:\?|$))/i;
 
-const AUTH_QUERY_PARAMS = /[?&](?:confirmation_token|verify_token|verification_token|auth_token|token|code|key|ticket|secret)=/i;
-const AUTH_PATH_SEGMENTS = /\/[^\s/?#]*(?:confirm|verif|activat|magic|password[_-]?reset|reset[_-]?password)[^\s/?#]*(?:[/?#]|$)/i;
+// Specific, high-confidence authentication query parameters
+const STRICT_AUTH_QUERY_PARAMS = /[?&](?:confirmation_token|verify_token|verification_token|auth_token|activation_token|login_token|reset_password_token|magic_token|oobCode)=/i;
+
+// URL path segments indicating authentication, activation, verification, or password reset
+const AUTH_PATH_SEGMENTS = /\/[^\s/?#]*(?:confirm|verif|activat|magic[_-]?login|password[_-]?reset|reset[_-]?password|auth[_-]?code)[^\s/?#]*(?:[/?#]|$)/i;
+
+// Query parameter indicating a token or code, valid when combined with an AUTH_PATH_SEGMENT
+const TOKEN_QUERY_PARAMS = /[?&](?:token|code|key|ticket|secret)=/i;
 
 /**
  * Extract authentication / verification links from email content without calling AI.
@@ -250,9 +256,17 @@ export function extractAuthLink(content: string): string | null {
             continue;
         }
 
-        // Check strong indicators in URL query or path
-        if (AUTH_QUERY_PARAMS.test(rawUrl) || AUTH_PATH_SEGMENTS.test(rawUrl)) {
+        // 1. High confidence: strict auth query parameter (e.g. ?confirmation_token=... or ?oobCode=...)
+        if (STRICT_AUTH_QUERY_PARAMS.test(rawUrl)) {
             return rawUrl;
+        }
+
+        // 2. URL path contains auth segment (e.g. /verify, /confirm, /activate, /password_reset)
+        if (AUTH_PATH_SEGMENTS.test(rawUrl)) {
+            // Must have a token/code query param or a path-based token (not just a static /login or /signup info page)
+            if (TOKEN_QUERY_PARAMS.test(rawUrl) || /\/[0-9a-zA-Z_-]{16,}(?:[/?#]|$)/.test(rawUrl)) {
+                return rawUrl;
+            }
         }
     }
 

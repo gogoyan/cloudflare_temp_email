@@ -1,6 +1,6 @@
 import { Context } from "hono";
 
-import { getJsonSetting, normalizeAddressDomain } from "../utils";
+import { getBooleanValue, getJsonSetting, normalizeAddressDomain } from "../utils";
 import { sendMailToTelegram } from "../telegram_api";
 import { auto_reply } from "./auto_reply";
 import { isBlocked } from "./black_list";
@@ -43,13 +43,14 @@ async function email(message: ForwardableEmailMessage, env: Bindings, ctx: Execu
         const emailRuleSettings = await getJsonSetting<EmailRuleSettings>(
             { env: env } as Context<HonoCustomType>, CONSTANTS.EMAIL_RULE_SETTINGS_KEY
         );
-        if (emailRuleSettings?.blockReceiveUnknowAddressEmail) {
+        const shouldBlockUnknown = getBooleanValue(env.BLOCK_UNKNOWN_ADDRESS) || emailRuleSettings?.blockReceiveUnknowAddressEmail;
+        if (shouldBlockUnknown) {
             const db_address_id = await env.DB.prepare(
                 `SELECT id FROM address where name = ? `
             ).bind(toAddress).first("id");
             if (!db_address_id) {
                 message.setReject("Unknown address");
-                console.log(`Unknown address mail from ${message.from} to ${toAddress}`);
+                console.log(`Unknown address mail rejected from ${message.from} to ${toAddress}`);
                 return;
             }
         }
