@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { extractCode, joinSubjectAndBody } from '../../../worker/src/email/extract_code.ts';
+import { extractAuthLink, extractCode, joinSubjectAndBody } from '../../../worker/src/email/extract_code.ts';
 import { ExtractMode, resolveExtractMode } from '../../../worker/src/email/extract_mode.ts';
 
 // Messages marked "2FHey" are adapted from https://github.com/SoFriendly/2fhey tests (CC0-1.0).
@@ -176,4 +176,25 @@ test('extract mode rejects unknown values', () => {
   assert.equal(resolveExtractMode('auto'), null);
   assert.equal(resolveExtractMode('regex'), null);
   assert.equal(resolveExtractMode(true), null);
+});
+
+test('extractAuthLink extracts Devpost activation link', () => {
+  const devpostEmail = `( http://devpost.com )\n\nPlease click the button below to verify your email address and activate your Devpost account:\n\nVerify my email ( https://secure.devpost.com/users/confirmation?confirmation_token=3Dsc__DPQkqmZ9jgo96zqt )\n\nIf you didn't sign up at https://devpost.com, let us know at support@devpost.com.`;
+  assert.equal(
+    extractAuthLink(devpostEmail),
+    'https://secure.devpost.com/users/confirmation?confirmation_token=sc__DPQkqmZ9jgo96zqt'
+  );
+});
+
+test('extractAuthLink extracts GitHub verification link', () => {
+  const githubEmail = `Please verify your email address to complete your GitHub registration.\nhttps://github.com/users/verified/emails/token12345/confirm_verification/abcde`;
+  assert.equal(
+    extractAuthLink(githubEmail),
+    'https://github.com/users/verified/emails/token12345/confirm_verification/abcde'
+  );
+});
+
+test('extractAuthLink returns null for marketing spam and social links', () => {
+  const marketingEmail = `Halloween costumes for your whole crew!\nApp Store: https://apps.apple.com/app/chatgpt/id6448311069\nUnsubscribe: https://r.openai.com/ls/click?upn=123`;
+  assert.equal(extractAuthLink(marketingEmail), null);
 });

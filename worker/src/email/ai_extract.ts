@@ -7,7 +7,7 @@
  */
 
 import { commonParseMail } from "../common";
-import { extractCode, joinSubjectAndBody } from "./extract_code";
+import { extractAuthLink, extractCode, joinSubjectAndBody } from "./extract_code";
 import { ExtractMode, resolveExtractMode } from "./extract_mode";
 import { getBooleanValue, getJsonSetting } from "../utils";
 import { CONSTANTS } from "../constants";
@@ -285,11 +285,20 @@ export async function extractEmailInfo(
         const runLocalExtract = async () => {
             const localContent = joinSubjectAndBody(parsedEmail?.subject, emailContent);
             const code = localContent ? extractCode(localContent) : null;
-            if (!code) return null;
-            const result: ExtractResult = { type: 'auth_code', result: code, result_text: '' };
-            await saveExtractMetadata(env, message_id, result);
-            console.log(`Local code extraction completed for ${message_id}`);
-            return result;
+            if (code) {
+                const result: ExtractResult = { type: 'auth_code', result: code, result_text: '' };
+                await saveExtractMetadata(env, message_id, result);
+                console.log(`Local code extraction completed for ${message_id}`);
+                return result;
+            }
+            const authLink = extractAuthLink(parsedEmailContext.rawEmail || localContent || parsedEmail?.html || '');
+            if (authLink) {
+                const result: ExtractResult = { type: 'auth_link', result: authLink, result_text: 'Verify Link' };
+                await saveExtractMetadata(env, message_id, result);
+                console.log(`Local auth link extraction completed for ${message_id}`);
+                return result;
+            }
+            return null;
         };
 
         // Local mode: built-in rules only, mail content is never sent to any AI model.
@@ -324,8 +333,11 @@ export async function extractEmailInfo(
         if (result.type !== 'none' && result.result) {
             await saveExtractMetadata(env, message_id, result);
             console.log(`AI extraction completed for ${message_id}: ${result.type}`);
+            return result;
         }
-        return result;
+
+        // Fallback to local rule extraction if AI did not detect code/auth link
+        return await runLocalExtract();
     } catch (e) {
         console.error('AI email extraction error:', e);
         return null;

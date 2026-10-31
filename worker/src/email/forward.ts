@@ -3,7 +3,7 @@ import { Context } from "hono";
 import { getBooleanValue, getEnvStringList, getJsonObjectValue, getJsonSetting, getMailDomain, isDomainOrSubdomain, normalizeDomain } from "../utils";
 import { EmailRuleSettings, ExtractResult } from "../models";
 import { CONSTANTS } from "../constants";
-import { extractCode, joinSubjectAndBody } from "./extract_code";
+import { extractAuthLink, extractCode, joinSubjectAndBody } from "./extract_code";
 import { commonParseMail } from "../common";
 
 // 正则表达式最大长度限制，防止 ReDoS 攻击
@@ -82,10 +82,10 @@ async function forwardByRules(
         ) || [];
 
         // 获取数据库配置
-        const emailRuleSettings = await getJsonSetting<EmailRuleSettings>(
+        const emailRuleSettings = env.DB ? await getJsonSetting<EmailRuleSettings>(
             { env: env } as Context<HonoCustomType>,
             CONSTANTS.EMAIL_RULE_SETTINGS_KEY
-        );
+        ) : null;
 
         // 合并两个配置，env 里的配置优先级更高
         const allRules = [
@@ -149,7 +149,7 @@ async function forwardEmail(
             }
         }
 
-        // 2. 本地兜底验证：若 AI 未开启或未提取出结果，通过本地 extractCode 正则引擎再检测一次
+        // 2. 本地兜底验证：若 AI 未开启或未提取出结果，通过本地 extractCode / extractAuthLink 引擎再检测一次
         if (!hasCodeOrAuth && parsedEmailContext) {
             try {
                 const parsedEmail = await commonParseMail(parsedEmailContext);
@@ -157,9 +157,14 @@ async function forwardEmail(
                 const code = localContent ? extractCode(localContent) : null;
                 if (code) {
                     hasCodeOrAuth = true;
+                } else if (getBooleanValue(env.FORWARD_ALLOW_AUTH_LINK ?? true)) {
+                    const authLink = extractAuthLink(parsedEmailContext.rawEmail || localContent || parsedEmail?.html || '');
+                    if (authLink) {
+                        hasCodeOrAuth = true;
+                    }
                 }
             } catch (e) {
-                console.error("forward fallback extractCode error", e);
+                console.error("forward fallback extract error", e);
             }
         }
 

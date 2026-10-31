@@ -222,3 +222,39 @@ function looksLikeDate(digits: string): boolean {
     }
     return false;
 }
+
+const EXCLUDED_AUTH_URL_PATTERNS = /(?:unsubscribe|opt[ -]?out|privacy|terms|cookie|settings|help|support|faq|twitter\.com|x\.com|facebook\.com|linkedin\.com|instagram\.com|discord\.(?:com|gg)|youtube\.com|\.(?:png|jpe?g|gif|svg|webp|ico|css|js)(?:\?|$))/i;
+
+const AUTH_QUERY_PARAMS = /[?&](?:confirmation_token|verify_token|verification_token|auth_token|token|code|key|ticket|secret)=/i;
+const AUTH_PATH_SEGMENTS = /\/[^\s/?#]*(?:confirm|verif|activat|magic|password[_-]?reset|reset[_-]?password)[^\s/?#]*(?:[/?#]|$)/i;
+
+/**
+ * Extract authentication / verification links from email content without calling AI.
+ * Handles quoted-printable encoding and filters out marketing/social links.
+ */
+export function extractAuthLink(content: string): string | null {
+    if (!content) return null;
+
+    // Unescape quoted-printable encoding
+    const cleanContent = content.replace(/=\r?\n/g, '').replace(/=3D/gi, '=');
+
+    // Extract all candidate URLs
+    const urlRegex = /https?:\/\/[^\s<>"'`)\],;]+/gi;
+    const matches = cleanContent.match(urlRegex) || [];
+
+    for (let rawUrl of matches) {
+        // Strip trailing punctuation
+        rawUrl = rawUrl.replace(/[.,;:!?]+$/, '');
+
+        if (EXCLUDED_AUTH_URL_PATTERNS.test(rawUrl)) {
+            continue;
+        }
+
+        // Check strong indicators in URL query or path
+        if (AUTH_QUERY_PARAMS.test(rawUrl) || AUTH_PATH_SEGMENTS.test(rawUrl)) {
+            return rawUrl;
+        }
+    }
+
+    return null;
+}

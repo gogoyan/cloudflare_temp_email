@@ -90,3 +90,33 @@ test("forwardEmail: forwards when aiExtract is null but local regex detects veri
     await forwardEmail(msg, env, null, parsedContext);
     assert.deepEqual(msg.forwardedTo, ["dest@example.com"]);
 });
+
+test("forwardEmail: forwards when aiExtract is null but local regex detects auth link (e.g. Devpost)", async () => {
+    const msg = createMockMessage("support@devpost.com", "goog@ruanwen8.com");
+    const env = {
+        FORWARD_ADDRESS_LIST: JSON.stringify(["ericcookingchannel@gmail.com"]),
+        FORWARD_ONLY_VERIFY_CODE: true,
+        FORWARD_ALLOW_AUTH_LINK: true,
+    };
+    const parsedContext = {
+        rawEmail: `Subject: Please confirm your email address\r\n\r\nPlease click the button below to verify your email address:\r\nVerify my email ( https://secure.devpost.com/users/confirmation?confirmation_token=3Dsc__DPQkqmZ9jgo96zqt )`,
+    };
+
+    await forwardEmail(msg, env, null, parsedContext);
+    assert.deepEqual(msg.forwardedTo, ["ericcookingchannel@gmail.com"]);
+});
+
+test("forwardEmail: skips forwarding when aiExtract is null and email is marketing spam with app links", async () => {
+    const msg = createMockMessage("noreply@email.openai.com", "pl34p0dgk8@daifa123.com");
+    const env = {
+        FORWARD_ADDRESS_LIST: JSON.stringify(["ericcookingchannel@gmail.com"]),
+        FORWARD_ONLY_VERIFY_CODE: true,
+        FORWARD_ALLOW_AUTH_LINK: true,
+    };
+    const parsedContext = {
+        rawEmail: `Subject: Halloween costumes for your whole crew\r\n\r\nCheck out DALL-E styles!\r\nDownload on App Store: https://apps.apple.com/app/chatgpt/id6448311069\r\nUnsubscribe: https://r.openai.com/ls/click?upn=123`,
+    };
+
+    await forwardEmail(msg, env, null, parsedContext);
+    assert.equal(msg.forwardedTo.length, 0, "Marketing email should not be forwarded");
+});
