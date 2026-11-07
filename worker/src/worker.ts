@@ -54,6 +54,27 @@ app.use('/*', async (c, next) => {
 	if (lang) { c.set("lang", lang); }
 	const msgs = i18n.getMessages(lang || c.env.DEFAULT_LANG);
 
+	// GeoIP country access control
+	if (c.req.path !== "/" && c.req.path !== "/health_check") {
+		const country = ((c.req.raw as unknown as { cf?: { country?: string } }).cf?.country)
+			|| c.req.raw.headers.get("cf-ipcountry");
+		if (country && country !== "XX" && country !== "T1") {
+			const countryUpper = country.toUpperCase();
+			if (c.env.BLOCKED_COUNTRIES) {
+				const blockedList = getEnvStringList(c.env.BLOCKED_COUNTRIES).map(s => s.trim().toUpperCase()).filter(Boolean);
+				if (blockedList.includes(countryUpper)) {
+					return c.text(`Access denied: Requests from ${countryUpper} are not permitted`, 403);
+				}
+			}
+			if (c.env.ALLOWED_COUNTRIES) {
+				const allowedList = getEnvStringList(c.env.ALLOWED_COUNTRIES).map(s => s.trim().toUpperCase()).filter(Boolean);
+				if (allowedList.length > 0 && !allowedList.includes(countryUpper)) {
+					return c.text(`Access denied: Requests from ${countryUpper} are not permitted`, 403);
+				}
+			}
+		}
+	}
+
 	// check header x-custom-auth
 	const passwords = getPasswords(c);
 	if (!c.req.path.startsWith("/open_api")

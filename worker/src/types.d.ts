@@ -55,6 +55,8 @@ type Bindings = {
     JWT_SECRET: string
     BLACK_LIST: string | undefined
     TO_BLACK_LIST: string | undefined
+    ALLOWED_COUNTRIES: string | undefined
+    BLOCKED_COUNTRIES: string | undefined
     MAX_MAILS_PER_ADDRESS_5MIN: string | number | undefined
     ENABLE_AUTO_REPLY: string | boolean | undefined
     ENABLE_WEBHOOK: string | boolean | undefined
