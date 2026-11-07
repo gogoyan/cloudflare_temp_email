@@ -1,6 +1,6 @@
 import { Context } from "hono";
 
-import { getBooleanValue, getJsonSetting, normalizeAddressDomain } from "../utils";
+import { getBooleanValue, getIntValue, getJsonSetting, normalizeAddressDomain } from "../utils";
 import { sendMailToTelegram } from "../telegram_api";
 import { auto_reply } from "./auto_reply";
 import { isBlocked } from "./black_list";
@@ -16,8 +16,8 @@ import { storeRawMail } from "./storage";
 
 async function email(message: ForwardableEmailMessage, env: Bindings, ctx: ExecutionContext) {
     const toAddress = normalizeAddressDomain(message.to);
-    if (await isBlocked(message, env)) {
-        message.setReject("Reject from address");
+    if (await isBlocked(message, env, toAddress)) {
+        message.setReject("Address blocked");
         console.log(`Reject message from ${message.from} to ${toAddress}`);
         return;
     }
@@ -83,8 +83,29 @@ async function email(message: ForwardableEmailMessage, env: Bindings, ctx: Execu
     // AI email content extraction
     const aiExtractResult = await extractEmailInfo(parsedEmailContext, env, message_id, toAddress);
 
+    // Flood / brute-force protection: suppress forwarding if an address receives too many emails in a short window
+    let isFloodDetected = false;
+    try {
+        if (env.DB) {
+            const recentCount = await env.DB.prepare(
+                `SELECT count(*) as count FROM raw_mails WHERE address = ? AND created_at > datetime('now', '-5 minutes')`
+            ).bind(toAddress).first<number>("count");
+            const maxPerWindow = getIntValue(env.MAX_MAILS_PER_ADDRESS_5MIN, 5);
+            if (recentCount !== null && recentCount !== undefined && recentCount >= maxPerWindow) {
+                isFloodDetected = true;
+                console.warn(`[SECURITY] Flood detected for ${toAddress} (${recentCount} mails in last 5m). Suppressing forward.`);
+            }
+        }
+    } catch (floodError) {
+        console.error("check flood error", floodError);
+    }
+
     // forward email
-    await forwardEmail(message, env, aiExtractResult, parsedEmailContext);
+    if (!isFloodDetected) {
+        await forwardEmail(message, env, aiExtractResult, parsedEmailContext);
+    } else {
+        console.log(`[FORWARD] Skipped forwarding email to ${toAddress}: flood limit reached`);
+    }
 
     // send email to telegram
     try {

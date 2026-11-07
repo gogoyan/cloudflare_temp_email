@@ -54,6 +54,8 @@ type Bindings = {
     DISABLE_ADMIN_PASSWORD_CHECK: string | boolean | undefined
     JWT_SECRET: string
     BLACK_LIST: string | undefined
+    TO_BLACK_LIST: string | undefined
+    MAX_MAILS_PER_ADDRESS_5MIN: string | number | undefined
     ENABLE_AUTO_REPLY: string | boolean | undefined
     ENABLE_WEBHOOK: string | boolean | undefined
     DISABLE_USER_SYSTEM: string | boolean | undefined
